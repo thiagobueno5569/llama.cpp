@@ -37,7 +37,7 @@ jobs:
             -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES="75;86;89" -DGGML_RPC=ON -DGGML_CUDA_CCCL_VERSION=v3.4.3 ^
             -DLLAMA_BUILD_BORINGSSL=ON -DLLAMA_BUILD_TESTS=OFF
           if errorlevel 1 exit /b 1
-          cmake --build build -j %NUMBER_OF_PROCESSORS% --target llama-server llama-perplexity llama-completion llama-bench rpc-server
+          cmake --build build -j %NUMBER_OF_PROCESSORS% --target llama-server llama-perplexity llama-completion llama-bench ggml-rpc-server
           if errorlevel 1 exit /b 1
 
       - name: Pack
