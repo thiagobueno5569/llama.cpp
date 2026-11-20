@@ -625,6 +625,7 @@ llama_context::llama_context(
             pp.n_skip    = params.moe_plastic_skip;
             pp.recruit   = params.moe_plastic_recruit;
             pp.half_life = params.moe_plastic_half_life > 0.0f ? params.moe_plastic_half_life : 512.0f;
+            pp.uniform   = params.moe_plastic_uniform;
             pp.memory    = params.moe_plastic_memory ? params.moe_plastic_memory : "";
             pp.vital     = params.moe_plastic_vital  ? params.moe_plastic_vital  : "";
             moe_plastic = std::make_unique<llama_moe_plastic>(model, pp);
@@ -4446,6 +4447,7 @@ llama_context_params llama_context_default_params() {
         /*.moe_plastic_skip            =*/ 4,
         /*.moe_plastic_recruit         =*/ 0.2f,
         /*.moe_plastic_half_life       =*/ 512.0f,
+        /*.moe_plastic_uniform         =*/ false,
         /*.moe_plastic_memory          =*/ nullptr,
         /*.moe_plastic_vital           =*/ nullptr,
         /*.abort_callback              =*/ nullptr,

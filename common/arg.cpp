@@ -2801,6 +2801,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_PLASTIC_HALF_LIFE"));
     add_opt(common_arg(
+        {"--moe-plastic-uniform"},
+        "plastic MoE: keep N live experts in each layer, instead of sharing N per layer on average among the layers by their routing",
+        [](common_params & params) {
+            params.moe_plastic_uniform = true;
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_UNIFORM"));
+    add_opt(common_arg(
         {"--moe-plastic-memory"}, "FNAME",
         "plastic MoE: file with the expert strengths of the last sessions, read at start and written at exit",
         [](common_params & params, const std::string & value) {

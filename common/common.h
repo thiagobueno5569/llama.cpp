@@ -623,6 +623,7 @@ struct common_params {
     int32_t     moe_plastic_skip      = 4;      // plastic MoE: the first MoE layers keep all experts
     float       moe_plastic_recruit   = 0.2f;   // plastic MoE: unmasked router weight over which an expert joins the live set
     float       moe_plastic_half_life = 512.0f; // plastic MoE: tokens for the strength of an unused expert to halve
+    bool        moe_plastic_uniform   = false;  // plastic MoE: same number of live experts in each layer
     std::string moe_plastic_memory;             // plastic MoE: memory file
     std::string moe_plastic_vital;              // plastic MoE: "il:e,..." experts that are never cut
 

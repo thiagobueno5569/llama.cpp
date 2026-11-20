@@ -414,6 +414,7 @@ extern "C" {
         int32_t      moe_plastic_skip;      // the first MoE layers keep all experts
         float        moe_plastic_recruit;   // unmasked router weight over which an expert joins the live set
         float        moe_plastic_half_life; // tokens for the strength of an unused expert to halve
+        bool         moe_plastic_uniform;   // same number of live experts in each layer, instead of a budget shared among the layers
         const char * moe_plastic_memory;    // file with the strengths of the last sessions (read at start, written at end), or NULL
         const char * moe_plastic_vital;     // "il:e,..." experts that are never cut, or NULL
 

@@ -132,8 +132,8 @@ struct llama_moe_plastic::impl {
         for (auto & l : layers) {
             n_active += l.active;
         }
-        LLAMA_LOG_INFO("%s: plastic MoE: %d of %d experts live in %d layers (first %d MoE layers whole), recruit at %.2f, half-life %.0f tokens\n",
-                __func__, params.n_keep, n_expert, n_active, params.n_skip, params.recruit, params.half_life);
+        LLAMA_LOG_INFO("%s: plastic MoE: %d of %d experts live per layer (%s), %d layers (first %d MoE layers whole), recruit at %.2f, half-life %.0f tokens\n",
+                __func__, params.n_keep, n_expert, params.uniform ? "same in each layer" : "on average, shared among the layers", n_active, params.n_skip, params.recruit, params.half_life);
 
         if (!no_alloc) {
             worker = std::thread([this] { prefetch_loop(); });
@@ -214,6 +214,90 @@ struct llama_moe_plastic::impl {
             }
         }
         apply(il, live);
+    }
+
+    // choose the live sets of all layers together: the total budget goes to the experts with the largest share of the
+    // routing of their layer, so layers with a spread routing get more experts and peaked layers get fewer
+    void rebuild_all() {
+        struct cand { float share; int32_t il; int32_t e; };
+        std::vector<cand> cands;
+        std::vector<std::vector<uint8_t>> live(layers.size());
+        std::vector<int32_t> n_live(layers.size(), 0);
+
+        const int32_t n_min = std::max(4, params.n_keep/4);
+        int64_t budget = 0;
+
+        for (size_t il = 0; il < layers.size(); ++il) {
+            plastic_layer & l = layers[il];
+            if (!l.active) {
+                continue;
+            }
+            std::vector<float> d(n_expert);
+            double d_sum = 0.0;
+            double m_sum = 0.0;
+            for (int32_t e = 0; e < n_expert; ++e) {
+                d[e]   = decayed(l, e);
+                d_sum += d[e];
+                m_sum += l.memory[e];
+            }
+            if (d_sum == 0.0 && m_sum == 0.0) {
+                continue; // nothing learned yet: keep all experts live
+            }
+            budget += std::min(params.n_keep, n_expert);
+            live[il].assign(n_expert, 0);
+
+            std::vector<cand> lc(n_expert);
+            for (int32_t e = 0; e < n_expert; ++e) {
+                float share = 0.0f;
+                if (d_sum > 0.0) {
+                    share += (m_sum > 0.0 ? 0.8f : 1.0f)*(float) (d[e]/d_sum);
+                }
+                if (m_sum > 0.0) {
+                    share += (d_sum > 0.0 ? 0.2f : 1.0f)*(float) (l.memory[e]/m_sum);
+                }
+                if (l.live[e]) {
+                    share *= 1.1f; // hysteresis
+                }
+                lc[e] = { share, (int32_t) il, e };
+            }
+            std::sort(lc.begin(), lc.end(), [](const cand & a, const cand & b) { return a.share > b.share; });
+            for (int32_t i = 0; i < n_expert; ++i) {
+                const int32_t e = lc[i].e;
+                if (i < n_min || l.vital[e]) {
+                    live[il][e] = 1;
+                    n_live[il]++;
+                    budget--;
+                } else {
+                    cands.push_back(lc[i]);
+                }
+            }
+        }
+        std::sort(cands.begin(), cands.end(), [](const cand & a, const cand & b) { return a.share > b.share; });
+        for (const cand & c : cands) {
+            if (budget <= 0) {
+                break;
+            }
+            live[c.il][c.e] = 1;
+            n_live[c.il]++;
+            budget--;
+        }
+        for (size_t il = 0; il < layers.size(); ++il) {
+            if (!live[il].empty()) {
+                apply((int32_t) il, live[il]);
+            }
+        }
+    }
+
+    void rebuild_sets() {
+        if (params.uniform) {
+            for (size_t il = 0; il < layers.size(); ++il) {
+                if (layers[il].active) {
+                    rebuild((int32_t) il);
+                }
+            }
+        } else {
+            rebuild_all();
+        }
     }
 
     void apply(int32_t il, const std::vector<uint8_t> & live) {
@@ -324,11 +408,7 @@ struct llama_moe_plastic::impl {
 
         // the live sets follow the strengths: after a prompt, and every 16 generated tokens
         if (n_tokens > 1 || clock - last_rebuild >= 16) {
-            for (size_t il = 0; il < layers.size(); ++il) {
-                if (layers[il].active) {
-                    rebuild((int32_t) il);
-                }
-            }
+            rebuild_sets();
             last_rebuild = clock;
         }
 
@@ -452,11 +532,7 @@ struct llama_moe_plastic::impl {
                 }
             }
         }
-        for (size_t il = 0; il < layers.size(); ++il) {
-            if (layers[il].active) {
-                rebuild((int32_t) il);
-            }
-        }
+        rebuild_sets();
         for (auto & l : layers) {
             if (l.active && l.dirty && l.mask->buffer && ggml_backend_buffer_get_size(l.mask->buffer) > 0) {
                 ggml_backend_tensor_set(l.mask, l.mask_data.data(), 0, ggml_nbytes(l.mask));
