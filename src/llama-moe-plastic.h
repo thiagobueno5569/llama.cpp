@@ -14,6 +14,7 @@ struct llama_moe_plastic_params {
     float       recruit;      // an expert out of the set joins it when the unmasked router gives it this weight
     float       half_life;    // tokens: the strength of an expert halves in half_life tokens without use
     bool        uniform;      // each layer keeps n_keep experts, instead of sharing n_keep*n_layer among the layers
+    float       novelty;      // a prompt whose live coverage is under this fraction of the usual coverage is a new subject
     std::string memory;       // file with the strengths of the last sessions, read at start and written at end
     std::string vital;        // "il:e,il:e,..." experts that are never cut (super experts)
 };

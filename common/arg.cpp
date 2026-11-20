@@ -2808,6 +2808,13 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_PLASTIC_UNIFORM"));
     add_opt(common_arg(
+        {"--moe-plastic-novelty"}, "F",
+        string_format("plastic MoE: when the live experts cover less of a prompt than this fraction of their usual coverage, the prompt is a new subject and the old strengths fade at once (default: %.2f, 0 = never)", (double) params.moe_plastic_novelty),
+        [](common_params & params, const std::string & value) {
+            params.moe_plastic_novelty = std::stof(value);
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_NOVELTY"));
+    add_opt(common_arg(
         {"--moe-plastic-memory"}, "FNAME",
         "plastic MoE: file with the expert strengths of the last sessions, read at start and written at exit",
         [](common_params & params, const std::string & value) {

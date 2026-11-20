@@ -1784,6 +1784,7 @@ struct llama_context_params common_context_params_to_llama(const common_params &
     cparams.moe_plastic_recruit   = params.moe_plastic_recruit;
     cparams.moe_plastic_half_life = params.moe_plastic_half_life;
     cparams.moe_plastic_uniform   = params.moe_plastic_uniform;
+    cparams.moe_plastic_novelty   = params.moe_plastic_novelty;
     cparams.moe_plastic_memory    = params.moe_plastic_memory.empty() ? nullptr : params.moe_plastic_memory.c_str();
     cparams.moe_plastic_vital     = params.moe_plastic_vital.empty()  ? nullptr : params.moe_plastic_vital.c_str();
 

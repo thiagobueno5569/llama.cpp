@@ -60,6 +60,8 @@ struct llama_moe_plastic::impl {
     size_t  n_recruit  = 0;
     size_t  n_create   = 0;
     size_t  n_cut      = 0;
+    size_t  n_novelty  = 0;
+    double  cov_ema    = 0.0;   // usual share of the router weight on live experts
 
     // prefetch: reads the host data of the experts that join a live set, so the next token does not wait for the disk
     std::thread                         worker;
@@ -150,8 +152,8 @@ struct llama_moe_plastic::impl {
             worker.join();
         }
         if (clock > 0) {
-            LLAMA_LOG_INFO("%s: plastic MoE: %lld tokens, %.1f%% of the wanted router weight on live experts, %zu recruited, %zu connections created, %zu cut, %zu experts prefetched\n",
-                    __func__, (long long) clock, w_wanted > 0 ? 100.0*w_live/w_wanted : 0.0, n_recruit, n_create, n_cut, n_prefetched.load());
+            LLAMA_LOG_INFO("%s: plastic MoE: %lld tokens, %.1f%% of the wanted router weight on live experts, %zu recruited, %zu connections created, %zu cut, %zu experts prefetched, %zu new subjects\n",
+                    __func__, (long long) clock, w_wanted > 0 ? 100.0*w_live/w_wanted : 0.0, n_recruit, n_create, n_cut, n_prefetched.load(), n_novelty);
             if (!params.memory.empty()) {
                 save(params.memory);
             }
@@ -364,30 +366,70 @@ struct llama_moe_plastic::impl {
         }
         ggml_backend_sched_synchronize(sched);
 
-        std::vector<int32_t> ids;
-        std::vector<float>   ws;
+        std::vector<std::vector<int32_t>> ids(layers.size());
+        std::vector<std::vector<float>>   ws(layers.size());
         int64_t n_tokens = 0;
+        int64_t n_used   = 0;
+        double  b_wanted = 0.0;
+        double  b_live   = 0.0;
 
         for (size_t il = 0; il < layers.size() && il < ids_t.size(); ++il) {
-            plastic_layer & l = layers[il];
+            const plastic_layer & l = layers[il];
             if (!l.active || ids_t[il] == nullptr || w_t[il] == nullptr) {
                 continue;
             }
             const ggml_tensor * ti = ids_t[il];
             const ggml_tensor * tw = w_t[il];
-            const int64_t n_used = ti->ne[0];
+            n_used   = ti->ne[0];
             n_tokens = ti->ne[1];
 
-            ids.resize(ggml_nelements(ti));
-            ws.resize(ggml_nelements(tw));
-            ggml_backend_tensor_get(ti, ids.data(), 0, ggml_nbytes(ti));
-            ggml_backend_tensor_get(tw, ws.data(),  0, ggml_nbytes(tw));
+            ids[il].resize(ggml_nelements(ti));
+            ws[il].resize(ggml_nelements(tw));
+            ggml_backend_tensor_get(ti, ids[il].data(), 0, ggml_nbytes(ti));
+            ggml_backend_tensor_get(tw, ws[il].data(),  0, ggml_nbytes(tw));
+
+            for (size_t i = 0; i < ids[il].size(); ++i) {
+                const int32_t e = ids[il][i];
+                if (e >= 0 && e < n_expert) {
+                    b_wanted += ws[il][i];
+                    b_live   += l.live[e] ? ws[il][i] : 0.0f;
+                }
+            }
+        }
+
+        // novelty: a prompt that the live sets cover badly is a new subject
+        // the old strengths fade at once, so the live sets follow the new subject before the answer
+        // compared with the usual coverage, so the threshold follows the size of the live sets
+        const double b_cov = b_wanted > 0.0 ? b_live/b_wanted : 1.0;
+        if (n_tokens > 1 && b_wanted > 0.0 && cov_ema > 0.0 && b_cov < params.novelty*cov_ema) {
+            for (auto & l : layers) {
+                if (!l.active) {
+                    continue;
+                }
+                for (int32_t e = 0; e < n_expert; ++e) {
+                    l.strength[e] = decayed(l, e)*0.1f;
+                    l.t_last[e]   = clock;
+                }
+            }
+            n_novelty++;
+        }
+        if (b_wanted > 0.0) {
+            cov_ema = cov_ema > 0.0 ? 0.9*cov_ema + 0.1*b_cov : b_cov;
+        }
+
+        for (size_t il = 0; il < layers.size(); ++il) {
+            plastic_layer & l = layers[il];
+            if (ids[il].empty()) {
+                continue;
+            }
+            const auto & ids_l = ids[il];
+            const auto & ws_l  = ws[il];
 
             for (int64_t t = 0; t < n_tokens; ++t) {
                 const int64_t now = clock + t;
                 for (int64_t k = 0; k < n_used; ++k) {
-                    const int32_t e = ids[t*n_used + k];
-                    const float   w = ws[t*n_used + k];
+                    const int32_t e = ids_l[t*n_used + k];
+                    const float   w = ws_l[t*n_used + k];
                     if (e < 0 || e >= n_expert) {
                         continue;
                     }
