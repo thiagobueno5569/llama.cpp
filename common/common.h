@@ -619,6 +619,13 @@ struct common_params {
     size_t moe_cache_size      = 0;    // GPU cache size in bytes for the MoE experts kept in the CPU, split among the GPUs like the layers
     float  moe_cache_cpu_share = 0.0f; // share of the MoE cache misses computed on the CPU instead of uploaded
 
+    int32_t     moe_plastic_n         = 0;      // plastic MoE: live experts per MoE layer, 0 = disabled
+    int32_t     moe_plastic_skip      = 4;      // plastic MoE: the first MoE layers keep all experts
+    float       moe_plastic_recruit   = 0.2f;   // plastic MoE: unmasked router weight over which an expert joins the live set
+    float       moe_plastic_half_life = 512.0f; // plastic MoE: tokens for the strength of an unused expert to halve
+    std::string moe_plastic_memory;             // plastic MoE: memory file
+    std::string moe_plastic_vital;              // plastic MoE: "il:e,..." experts that are never cut
+
     common_conversation_mode conversation_mode = COMMON_CONVERSATION_MODE_AUTO;
 
     // multimodal models (see tools/mtmd)

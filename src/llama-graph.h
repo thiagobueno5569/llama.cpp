@@ -24,6 +24,7 @@ struct llama_prec_policy;
 struct llama_hadamard;
 
 class llama_moe_cache;
+class llama_moe_plastic;
 
 struct llama_memory_context_i;
 
@@ -860,6 +861,7 @@ struct llm_graph_params {
     const llama_memory_context_i * mctx;
     const llama_cross            * cross;
     const llama_moe_cache        * moe_cache;
+    const llama_moe_plastic      * moe_plastic;
 
     ggml_tensor * layer_inp_dev = nullptr; // own layer input device buffer (write)
     ggml_tensor * layer_inp_src = nullptr; // ctx_other's layer input device buffer (read)
@@ -1041,6 +1043,10 @@ public:
     // [0] is the LLAMA_MOE_RANDOM_ROUTING input, the rest are views of it
     std::vector<ggml_tensor *> t_moe_ids;
 
+    // [n_layer] unmasked router choices of the plastic MoE layers, see llama_moe_plastic::observe
+    std::vector<ggml_tensor *> t_moe_pref_ids; // I32 [n_expert_used, n_tokens]
+    std::vector<ggml_tensor *> t_moe_pref_w;   // F32 [1, n_expert_used, n_tokens]
+
     std::vector<llm_graph_input_ptr> inputs;
     std::vector<llm_graph_fused_node> fused_nodes;
 
@@ -1134,6 +1140,7 @@ struct llm_graph_context {
     const llama_memory_context_i * mctx;
     const llama_cross            * cross;
     const llama_moe_cache        * moe_cache;
+    const llama_moe_plastic      * moe_plastic;
 
     const llama_hadamard * hdmd;
 

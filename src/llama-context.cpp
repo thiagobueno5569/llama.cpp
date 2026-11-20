@@ -619,6 +619,17 @@ llama_context::llama_context(
             moe_cache = std::make_unique<llama_moe_cache>(model, model.no_alloc(), backend_ptrs, backend_buft, cparams.moe_cache_size, cparams.moe_cache_cpu_share);
         }
 
+        if (params.moe_plastic_n > 0 && model.hparams.n_expert > 0) {
+            llama_moe_plastic_params pp;
+            pp.n_keep    = params.moe_plastic_n;
+            pp.n_skip    = params.moe_plastic_skip;
+            pp.recruit   = params.moe_plastic_recruit;
+            pp.half_life = params.moe_plastic_half_life > 0.0f ? params.moe_plastic_half_life : 512.0f;
+            pp.memory    = params.moe_plastic_memory ? params.moe_plastic_memory : "";
+            pp.vital     = params.moe_plastic_vital  ? params.moe_plastic_vital  : "";
+            moe_plastic = std::make_unique<llama_moe_plastic>(model, pp);
+        }
+
         sched_reserve();
 
         if (!cparams.flash_attn) {
@@ -2415,6 +2426,10 @@ int llama_context::decode(const llama_batch_ext & batch_inp) {
         //    ggml_graph_dump_dot(gf, NULL, "llama.dot");
         //}
 
+        if (moe_plastic) {
+            moe_plastic->observe(*res, sched.get());
+        }
+
         auto * t_logits  = res->get_logits();
         auto * t_embd    = cparams.embeddings       ? res->get_embd()     : nullptr;
         auto * t_h_nextn = cparams.embeddings_nextn ? res->get_h_nextn()  : nullptr;
@@ -3078,6 +3093,7 @@ llm_graph_params llama_context::graph_params(
         /*.mctx        =*/ mctx,
         /*.cross       =*/ &cross,
         /*.moe_cache   =*/ moe_cache.get(),
+        /*.moe_plastic =*/ moe_plastic.get(),
         /*.layer_inp_dev =*/ layer_inp_dev,
         /*.layer_inp_src =*/ supports_embd_row() ? cparams.ctx_other->get_layer_inp_dev() : nullptr,
         /*.h_nextn_dev   =*/ cparams.embeddings_nextn_dev ? h_nextn_dev : nullptr,
@@ -4426,6 +4442,12 @@ llama_context_params llama_context_default_params() {
         /*.type_v                      =*/ GGML_TYPE_F16,
         /*.moe_cache_size              =*/ 0,
         /*.moe_cache_cpu_share         =*/ 0.0f,
+        /*.moe_plastic_n               =*/ 0,
+        /*.moe_plastic_skip            =*/ 4,
+        /*.moe_plastic_recruit         =*/ 0.2f,
+        /*.moe_plastic_half_life       =*/ 512.0f,
+        /*.moe_plastic_memory          =*/ nullptr,
+        /*.moe_plastic_vital           =*/ nullptr,
         /*.abort_callback              =*/ nullptr,
         /*.abort_callback_data         =*/ nullptr,
         /*.embeddings                  =*/ false,

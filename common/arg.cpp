@@ -2770,6 +2770,51 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_CACHE_CPU_SHARE"));
     add_opt(common_arg(
+        {"--moe-plastic"}, "N",
+        "plastic MoE: the router of each MoE layer selects only from N live experts; the live set follows the experts that the conversation uses, and the other experts are never read (default: 0, disabled)",
+        [](common_params & params, int value) {
+            if (value < 0) {
+                throw std::invalid_argument("invalid value");
+            }
+            params.moe_plastic_n = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC"));
+    add_opt(common_arg(
+        {"--moe-plastic-skip"}, "N",
+        string_format("plastic MoE: the first N MoE layers keep all their experts (default: %d)", params.moe_plastic_skip),
+        [](common_params & params, int value) {
+            params.moe_plastic_skip = std::max(0, value);
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_SKIP"));
+    add_opt(common_arg(
+        {"--moe-plastic-recruit"}, "F",
+        string_format("plastic MoE: an expert out of the live set joins it when the unmasked router gives it this weight (default: %.2f)", (double) params.moe_plastic_recruit),
+        [](common_params & params, const std::string & value) {
+            params.moe_plastic_recruit = std::stof(value);
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_RECRUIT"));
+    add_opt(common_arg(
+        {"--moe-plastic-half-life"}, "N",
+        string_format("plastic MoE: tokens for the strength of an unused expert to halve (default: %.0f)", (double) params.moe_plastic_half_life),
+        [](common_params & params, const std::string & value) {
+            params.moe_plastic_half_life = std::stof(value);
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_HALF_LIFE"));
+    add_opt(common_arg(
+        {"--moe-plastic-memory"}, "FNAME",
+        "plastic MoE: file with the expert strengths of the last sessions, read at start and written at exit",
+        [](common_params & params, const std::string & value) {
+            params.moe_plastic_memory = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_MEMORY"));
+    add_opt(common_arg(
+        {"--moe-plastic-vital"}, "LIST",
+        "plastic MoE: experts that are never cut, as layer:expert pairs, e.g. 1:68,2:92,3:82 (super experts)",
+        [](common_params & params, const std::string & value) {
+            params.moe_plastic_vital = value;
+        }
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_VITAL"));
+    add_opt(common_arg(
         {"-ncffn", "--n-cpu-ffn"}, "N",
         "keep the dense FFN weights of the first N layers in the CPU\n"
         "(dense models; for MoE expert weights use --n-cpu-moe)",

@@ -3,6 +3,7 @@
 #include "llama-impl.h"
 #include "llama-model.h"
 #include "llama-moe-cache.h"
+#include "llama-moe-plastic.h"
 #include "llama-batch.h"
 #include "llama-cparams.h"
 #include "llama-sampler.h"
@@ -1559,6 +1560,9 @@ void llm_graph_result::reset() {
     t_sampling_all.clear();
     t_moe_ids.clear();
 
+    t_moe_pref_ids.assign(LLAMA_MAX_LAYERS, nullptr);
+    t_moe_pref_w.assign(LLAMA_MAX_LAYERS, nullptr);
+
     params = {};
 
     inputs.clear();
@@ -1716,6 +1720,7 @@ llm_graph_context::llm_graph_context(const llm_graph_params & params) :
     mctx             (params.mctx),
     cross            (params.cross),
     moe_cache        (params.moe_cache),
+    moe_plastic      (params.moe_plastic),
     hdmd             (model.hdmd.rot.empty() ? nullptr : &model.hdmd),
     layer_inp_dev    (params.layer_inp_dev),
     layer_inp_src    (params.layer_inp_src),
@@ -2418,6 +2423,25 @@ ggml_tensor * llm_graph_context::build_moe_ffn(
     if (gate_inp_b) {
         logits = ggml_add(ctx0, logits, gate_inp_b);
         cb(logits, "ffn_moe_logits_biased", il);
+    }
+
+    // plastic MoE: the router selects only the live experts of the layer
+    // the unmasked choices are kept as outputs, so that the live set can follow what the router wants
+    if (ggml_tensor * mask = moe_plastic && probs_in == nullptr && selected_experts_in == nullptr && exp_probs_b == nullptr &&
+            hparams.n_expert_groups <= 1 && n_expert == hparams.n_expert ? moe_plastic->get_mask(il) : nullptr) {
+        ggml_tensor * pref_p   = ggml_soft_max(ctx0, logits); // [n_expert, n_tokens]
+        ggml_tensor * pref_ids = ggml_cont(ctx0, ggml_argsort_top_k(ctx0, pref_p, n_expert_used)); // [n_expert_used, n_tokens]
+        ggml_tensor * pref_w   = ggml_get_rows(ctx0, ggml_reshape_3d(ctx0, pref_p, 1, n_expert, n_tokens), pref_ids); // [1, n_expert_used, n_tokens]
+        ggml_set_output(pref_ids);
+        ggml_set_output(pref_w);
+        ggml_build_forward_expand(gf, pref_w);
+        cb(pref_ids, "ffn_moe_pref_ids", il);
+        cb(pref_w,   "ffn_moe_pref_w",   il);
+        res->t_moe_pref_ids[il] = pref_ids;
+        res->t_moe_pref_w[il]   = pref_w;
+
+        logits = ggml_add(ctx0, logits, mask);
+        cb(logits, "ffn_moe_logits_plastic", il);
     }
 
     ggml_tensor * probs = nullptr;

@@ -409,6 +409,14 @@ extern "C" {
         size_t moe_cache_size;      // device cache in bytes for the experts kept in host memory, split among the devices like the layers, 0 = disabled [EXPERIMENTAL]
         float  moe_cache_cpu_share; // share of the MoE cache misses computed on the CPU instead of uploaded, 0 = all uploaded [EXPERIMENTAL]
 
+        // plastic MoE: the router of each MoE layer selects only from a live set of experts that follows the conversation [EXPERIMENTAL]
+        int32_t      moe_plastic_n;         // live experts per MoE layer, 0 = disabled
+        int32_t      moe_plastic_skip;      // the first MoE layers keep all experts
+        float        moe_plastic_recruit;   // unmasked router weight over which an expert joins the live set
+        float        moe_plastic_half_life; // tokens for the strength of an unused expert to halve
+        const char * moe_plastic_memory;    // file with the strengths of the last sessions (read at start, written at end), or NULL
+        const char * moe_plastic_vital;     // "il:e,..." experts that are never cut, or NULL
+
         // Abort callback
         // if it returns true, execution of llama_decode() will be aborted
         // currently works only with CPU execution
