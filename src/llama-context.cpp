@@ -4448,7 +4448,7 @@ llama_context_params llama_context_default_params() {
         /*.moe_plastic_skip            =*/ 4,
         /*.moe_plastic_recruit         =*/ 0.2f,
         /*.moe_plastic_half_life       =*/ 512.0f,
-        /*.moe_plastic_uniform         =*/ false,
+        /*.moe_plastic_uniform         =*/ true,
         /*.moe_plastic_novelty         =*/ 0.85f,
         /*.moe_plastic_memory          =*/ nullptr,
         /*.moe_plastic_vital           =*/ nullptr,

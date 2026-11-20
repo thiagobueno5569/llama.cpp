@@ -2801,12 +2801,12 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_env("LLAMA_ARG_MOE_PLASTIC_HALF_LIFE"));
     add_opt(common_arg(
-        {"--moe-plastic-uniform"},
-        "plastic MoE: keep N live experts in each layer, instead of sharing N per layer on average among the layers by their routing",
+        {"--moe-plastic-shared"},
+        "plastic MoE: share N live experts per layer on average among the layers by their routing, instead of N in each layer (higher coverage, but lower quality in tests)",
         [](common_params & params) {
-            params.moe_plastic_uniform = true;
+            params.moe_plastic_uniform = false;
         }
-    ).set_env("LLAMA_ARG_MOE_PLASTIC_UNIFORM"));
+    ).set_env("LLAMA_ARG_MOE_PLASTIC_SHARED"));
     add_opt(common_arg(
         {"--moe-plastic-novelty"}, "F",
         string_format("plastic MoE: when the live experts cover less of a prompt than this fraction of their usual coverage, the prompt is a new subject and the old strengths fade at once (default: %.2f, 0 = never)", (double) params.moe_plastic_novelty),
