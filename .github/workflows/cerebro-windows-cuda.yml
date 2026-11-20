@@ -44,6 +44,7 @@ jobs:
         run: |
           New-Item -ItemType Directory pack | Out-Null
           Copy-Item .\build\bin\*.exe, .\build\bin\*.dll pack\
+          Copy-Item "$env:CUDA_PATH\bin\cudart64_12.dll", "$env:CUDA_PATH\bin\cublas64_12.dll", "$env:CUDA_PATH\bin\cublasLt64_12.dll" pack\
           Get-ChildItem pack
           7z a llama-cerebro-win-cuda-12.4-x64.zip .\pack\*
 
