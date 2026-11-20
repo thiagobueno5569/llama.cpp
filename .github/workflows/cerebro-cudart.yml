@@ -1,11 +1,9 @@
 name: plastic MoE - CUDA runtime DLLs
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: release tag to attach the DLLs to
-        default: cerebro-6
+  push:
+    branches: [cerebro]
+    paths: [.github/workflows/cerebro-cudart.yml]
 
 permissions:
   contents: write
@@ -31,4 +29,4 @@ jobs:
           Copy-Item "$env:CUDA_PATH\bin\cudart64_12.dll", "$env:CUDA_PATH\bin\cublas64_12.dll", "$env:CUDA_PATH\bin\cublasLt64_12.dll" rt\
           Get-ChildItem rt
           7z a cudart-win-cuda-12.4-x64.zip .\rt\*
-          gh release upload "${{ inputs.tag }}" cudart-win-cuda-12.4-x64.zip --clobber
+          gh release upload cerebro-6 cudart-win-cuda-12.4-x64.zip --clobber
